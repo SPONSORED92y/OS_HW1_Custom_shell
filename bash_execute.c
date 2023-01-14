@@ -8,72 +8,59 @@
 #include <sys/wait.h>
 char ***get_record_buffer();
 
+#define READ 0
+#define WRITE 1
+
 struct FD
 {
-    int pip[2];
+    int pip_prev[2]; // read from
+    int pip_cur[2];  // write to
     int copy_stdin;
     int copy_stdout;
     char in[30];
     char out[30];
-    int file_in;
-    int file_out;
+    int first_input; // could be stdin or file in
+    int last_output; // could be stdout or file out
 } fd;
 
 void initialize_fd()
 {
-    if (pipe(fd.pip) < 0)
-    // pipe[0] read fd[2]
-    // pipe[1] write fd[3]
+    if ((fd.copy_stdin = dup(STDIN_FILENO)) < 0)
     {
-        fprintf(stderr, "bash: pipe error\n");
+        perror("bash: ");
+        exit(EXIT_FAILURE);
     }
-    fd.copy_pip[0] = dup(fd.pip[0]);
-    fd.copy_pip[1] = dup(fd.pip[1]);
-    fd.copy_stdin = dup(0);       // fd[5]
-    fd.copy_stdout = dup(1);      // fd[6]
-    if (strcmp(fd.in, "\0") != 0) // fd[7]
+    if ((fd.copy_stdout = dup(STDOUT_FILENO)) < 0)
     {
-        fd.file_in = open(fd.in, O_RDONLY);
-        close(STDIN_FILENO);
-        dup2(fd.file_in, 0); // stdin now covered by in_file
+        perror("bash: ");
+        exit(EXIT_FAILURE);
     }
-    else
+    // first_input: determine stdin or file in
+    if (strcmp(fd.in, "\0") != 0)
     {
-        fd.file_in = 0;
-    }
-    if (strcmp(fd.out, "\0") != 0) // fd[8]
-    {
-        fd.file_out = open(fd.out, O_WRONLY | O_CREAT | O_TRUNC, 777);
+        if ((fd.first_input = open(fd.in, O_RDONLY)) < 0)
+        {
+            perror("bash: ");
+            exit(EXIT_FAILURE);
+        }
     }
     else
     {
-        fd.file_out = 0;
+        fd.first_input = dup(STDIN_FILENO);
     }
-}
-void close_fd()
-{
-    close(fd.pip[0]);
-    close(fd.pip[1]);
-    if (fd.file_in > 0)
+    // first_output: determine stdout or file out
+    if (strcmp(fd.out, "\0") != 0)
     {
-        close(fd.file_in);
+        if ((fd.last_output = open(fd.out, O_WRONLY | O_CREAT | O_TRUNC, 777)) < 0)
+        {
+            perror("bash: ");
+            exit(EXIT_FAILURE);
+        }
     }
-}
-
-void restore_fd()
-{
-
-    fd.pip[0] = dup(fd.copy_pip[0]);
-    fd.pip[1] = dup(fd.copy_pip[1]);
-    if (strcmp(fd.in, "\0") != 0) // fd[7]
+    else
     {
-        fd.file_in = open(fd.in, O_RDONLY);
+        fd.last_output = dup(STDOUT_FILENO);
     }
-    /*if (fd.table[0] == 2) // pipe read
-    {
-        fd.pip[0] = dup(fd.copy_pip[0]);
-        dup2(pip[0], 0);
-    }*/
 }
 
 int bash_execute(char **args)
@@ -84,10 +71,9 @@ int bash_execute(char **args)
         return 1;
     }
     // set flags
-    int flags = 0;     //<|>
-    int amps = 0;      //&
-    int pip_count = 0; //|
-    int seen = 0;      // temp
+    int amps = 0;        //&
+    int pip_count = 0;   //|
+    int ran_builtin = 0; // temp
     pid_t pid = -1;
     // check &
     for (int i = 0; strcmp(args[i], "\0") != 0; i++)
@@ -121,7 +107,6 @@ int bash_execute(char **args)
     {
         if (strcmp(args[i], "<") == 0)
         {
-            flags += 4;
             strcpy(fd.in, args[i + 1]);
             // delete and move NULL forward
             for (int j = i + 2;; j++)
@@ -138,15 +123,10 @@ int bash_execute(char **args)
         }
         else if (strcmp(args[i], "|") == 0)
         {
-            if (pip_count == 0)
-            {
-                flags += 2;
-            }
             pip_count++;
         }
         else if (strcmp(args[i], ">") == 0)
         {
-            flags += 1;
             strcpy(fd.out, args[i + 1]);
             // delete and move NULL forward
             for (int j = i + 2;; j++)
@@ -174,106 +154,99 @@ int bash_execute(char **args)
         return 1;
     }
     // adjust IO
-    if (flags == 1 || flags == 5)
+    int iteration = 0;
+    while (1)
     {
-        close(STDOUT_FILENO);
-        dup2(fd.file_out, 1);
-    }
-    else if (flags == 2 || flags == 3 || flags == 6 || flags == 7)
-    {
-        dup2(fd.pip[1], 1);
-    }
-    // first cmd
-    seen = 0;
-    // printf("arg[0] is:%s\n", args[0]);
-    for (int j = 0; j < bash_num_builtins(); j++)
-    {
-        if (strcmp(args[0], builtin_str[j]) == 0)
+        //---------------------
+        //        |
+        // input  v
+        if (iteration == 0)
+        { // first cmd
+          // could be stdin or file_in
+            dup2(fd.first_input, STDIN_FILENO);
+            close(fd.first_input);
+        }
+        else
         {
-            if ((*builtin_func[j])(args) == 0)
+            // pipe
+            fd.pip_prev[READ] = dup(fd.pip_cur[READ]);
+            dup2(fd.pip_prev[READ], STDIN_FILENO);
+            close(fd.pip_prev[READ]);
+        }
+        //---------------------
+        //         |
+        // output  v
+        if (--pip_count < 0)
+        { // last cmd
+          // could be stdout or file_out
+            dup2(fd.last_output, STDOUT_FILENO);
+            close(fd.last_output);
+        }
+        else
+        {
+            // pipe
+            if (pipe(fd.pip_cur) < 0)
             {
-                // fflush(stdout);
-                return 0;
+                perror("shell: ");
             }
-            seen = 1;
-            break;
+            dup2(fd.pip_cur[WRITE], STDOUT_FILENO);
+            close(fd.pip_cur[WRITE]);
         }
-    }
-    if (seen == 0)
-    {
-        if (bash_launch(args) == 0)
+        //---------------------
+        // execute cmd
+        // check if it's builtin
+        ran_builtin = 0;
+        for (int j = 0; j < bash_num_builtins(); j++)
         {
-            return 0;
-        }
-    }
-    // adjust IO after first cmd
-    if (flags == 2 || flags == 3 || flags == 6 || flags == 7)
-    {
-        close(STDIN_FILENO);
-        dup2(fd.pip[0], 0);
-    }
-    // follow up cmds
-    for (int i = 1;; i++)
-    {
-        if (strcmp(args[i], "\0") == 0)
-        {
-            break;
-        }
-        else if (strcmp(args[i], "|") == 0)
-        {
-            i++;
-            pip_count--;
-            // adjust IO before last cmd
-            if (pip_count == 0)
+            if (strcmp(args[0], builtin_str[j]) == 0)
             {
-                if (flags == 2 || flags == 6)
+                if ((*builtin_func[j])(args) == 0)
                 {
-                    close(fd.pip[1]);
-                    dup2(fd.copy_stdout, 1);
-                }
-                else if (flags == 3 || flags == 7)
-                {
-                    close(fd.pip[1]);
-                    dup2(fd.file_out, 1);
-                }
-            }
-            seen = 0;
-            for (int j = 0; j < bash_num_builtins(); j++)
-            {
-                if (strcmp(args[i], builtin_str[j]) == 0)
-                {
-                    if ((*builtin_func[j])(args + i) == 0)
+                    if (pid == 0)
                     {
-                        return 0;
+                        exit(0);
                     }
-                    seen = 1;
-                    break;
-                }
-            }
-            if (seen == 0)
-            {
-                if (bash_launch(args + i) == 0)
-                {
                     return 0;
                 }
+                fflush(stdout);
+                ran_builtin = 1;
+                break;
             }
         }
+        if (ran_builtin == 0) // if the cmd is not builtin
+        {
+            if (bash_launch(args) == 0)
+            {
+                if (pid == 0)
+                {
+                    exit(0);
+                }
+                return 0;
+            }
+            fflush(stdout);
+        }
+
+        iteration++;
+        if (pip_count < 0)
+        {
+            break;
+        }
     }
+    perror("err219\n");
+    fflush(stderr);
     // restore IO
-    dup2(fd.copy_stdin, 0);
-    dup2(fd.copy_stdout, 1);
-    close(fd.pip[0]);
-    close(fd.pip[1]);
+    if ((dup2(fd.copy_stdin, STDIN_FILENO)) < 0)
+    {
+        perror("bash: ");
+        exit(EXIT_FAILURE);
+    }
+    if ((dup2(fd.copy_stdout, STDOUT_FILENO)) < 0)
+    {
+        perror("bash: ");
+        exit(EXIT_FAILURE);
+    }
     close(fd.copy_stdin);
     close(fd.copy_stdout);
-    if (fd.file_in > 0)
-    {
-        close(fd.file_in);
-    }
-    if (fd.file_out > 0)
-    {
-        close(fd.file_out);
-    }
     if (pid == 0)
     {
         exit(0);
@@ -308,24 +281,23 @@ int bash_launch(char **args)
     if (pid == 0)
     {
         // child
-        // fflush(stdout);
         if (execvp(new_args[0], new_args) == -1)
         {
-            perror("lsh");
+            perror("bash: ");
         }
         exit(EXIT_FAILURE);
     }
     else if (pid < 0)
     {
         // error forking
-        perror("lsh");
+        perror("bash: ");
     }
     else
     {
         //  parent
-        close_fd();
+        close(STDOUT_FILENO);
+        // close(fd.pip_cur[WRITE]);
         wpid = waitpid(pid, &status, WUNTRACED);
-        restore_fd();
     }
     free(new_args);
     return 1;
