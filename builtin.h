@@ -71,7 +71,7 @@ int bash_cd(char **args)
 
 int bash_echo(char **args)
 {
-    if (args[1] == NULL)
+    if (strcmp(args[1], "\0") == 0)
     {
         fprintf(stderr, "bash: expected argument to \"echo\"\n");
     }
@@ -79,7 +79,7 @@ int bash_echo(char **args)
     {
         for (int i = 2;; i++)
         {
-            if (args[i] == NULL || strcmp(args[i], "|") == 0)
+            if (args[i] == NULL || strcmp(args[i], "\0") == 0 || strcmp(args[i], "|") == 0)
             {
                 break;
             }
@@ -91,7 +91,7 @@ int bash_echo(char **args)
     {
         for (int i = 1;; i++)
         {
-            if (args[i] == NULL || strcmp(args[i], "|") == 0)
+            if (args[i] == NULL || strcmp(args[i], "\0") == 0 || strcmp(args[i], "|") == 0)
             {
                 break;
             }
@@ -141,7 +141,7 @@ int bash_record(char **args)
 
 int bash_mypid(char **args)
 {
-    if (args[1] == NULL)
+    if (strcmp(args[1], "\0") == 0)
     {
         fprintf(stderr, "bash: expected argument to \"mypid\"\n");
     }
@@ -152,7 +152,7 @@ int bash_mypid(char **args)
     }
     else if (strcmp(args[1], "-p") == 0)
     {
-        if (args[2] == NULL)
+        if (strcmp(args[2], "\0") == 0)
         {
             fprintf(stderr, "bash: expected argument to \"mypid -p\"\n");
             return 1;
@@ -187,7 +187,7 @@ int bash_mypid(char **args)
     }
     else if (strcmp(args[1], "-c") == 0)
     {
-        if (args[2] == NULL)
+        if (strcmp(args[2], "\0") == 0)
         {
             fprintf(stderr, "bash: expected argument to \"mypid -p\"\n");
             return 1;
