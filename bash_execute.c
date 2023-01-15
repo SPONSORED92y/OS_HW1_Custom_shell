@@ -20,8 +20,8 @@ int bash_execute(char **args)
         return 1;
     }
     // set flags
-    int pip_prev[2]; // read from
-    int pip_cur[2];  // write to
+    // int pip_prev[2]; // read from
+    int pip_cur[2]; // write to
     int copy_stdin;
     int copy_stdout;
     char in[30] = "\0";
@@ -135,7 +135,6 @@ int bash_execute(char **args)
     }
     else
     {
-        fprintf(stderr, "err143\n");
         last_output = dup(STDOUT_FILENO);
     }
 
@@ -152,6 +151,7 @@ int bash_execute(char **args)
     // adjust IO
     int iteration = 0;
     // int p3[2];
+    int tp = -1;
     while (1)
     {
         fprintf(stderr, "it: %d %d\n", iteration, cmd_count);
@@ -175,20 +175,29 @@ int bash_execute(char **args)
         { // first cmd
           // could be stdin or file_in
             dup2(first_input, STDIN_FILENO);
-            close(first_input);
+            // close(first_input);
         }
         else
         {
+            tp = dup(3);
+            close(tp);
+            tp = -1;
             if ((dup2(pip_cur[READ], STDIN_FILENO)) < 0)
             {
                 perror("lll: ");
                 exit(EXIT_FAILURE);
             }
+            tp = dup(3);
+            close(tp);
+            tp = -1;
             if (close(pip_cur[READ]) < 0)
             {
                 perror("close1: ");
                 exit(EXIT_FAILURE);
             }
+            tp = dup(3);
+            close(tp);
+            tp = -1;
             // close(pip_cur[READ]);
             //  pipe
             /*pip_prev[READ] = dup(pip_cur[READ]);
@@ -210,13 +219,13 @@ int bash_execute(char **args)
                 fflush(stderr);
                 exit(EXIT_FAILURE);
             }
-            close(last_output);
+            //            close(last_output);
         }
         else
         {
             // pipe
-            // pip_cur[0] = 0;
-            // pip_cur[1] = 0;
+            pip_cur[0] = 0;
+            pip_cur[1] = 0;
             if (pipe(pip_cur) < 0)
             {
                 perror("shell: ");
@@ -233,6 +242,9 @@ int bash_execute(char **args)
                 perror("close: ");
                 exit(EXIT_FAILURE);
             }
+            tp = dup(3);
+            close(tp);
+            tp = -1;
         }
         //---------------------
         // execute cmd
@@ -288,6 +300,8 @@ int bash_execute(char **args)
     }
     close(copy_stdin);
     close(copy_stdout);
+    close(first_input);
+    close(last_output);
     if (pid == 0)
     {
         exit(0);
@@ -341,7 +355,7 @@ int bash_launch(char **args)
     else
     {
         //  parent
-        close(STDOUT_FILENO);
+        // close(STDOUT_FILENO);
         // close(pip_cur[WRITE]);
         wpid = waitpid(pid, &status, WUNTRACED);
     }
