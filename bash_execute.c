@@ -13,12 +13,6 @@ char ***get_record_buffer();
 
 int bash_execute(char **args)
 {
-    /*int l = 0;
-    while (args[l])
-    {
-        fprintf(stderr, "%s_", args[l]);
-        l++;
-    }*/
     // check empty comand
     if (strcmp(args[0], "\0") == 0)
     {
@@ -48,7 +42,6 @@ int bash_execute(char **args)
     }
     if (amps == 1)
     {
-        int status;
         pid = fork();
         if (pid > 0)
         {
@@ -59,7 +52,7 @@ int bash_execute(char **args)
         else if (pid < 0)
         {
             // error forking
-            perror("lsh: error forking");
+            perror("bash: ");
         }
         // else { child process }
     }
@@ -152,7 +145,7 @@ int bash_execute(char **args)
         }
         return 1;
     }
-    //
+    // adj IO & excute
     int iteration = 0;
     while (1)
     {
@@ -304,10 +297,6 @@ int bash_launch(char **args)
         strcpy(new_args[i], args[i]);
     }
     new_args[len] = NULL;
-    fprintf(stderr, "%s\n", new_args[0]);
-    // printf("SSSSSSSSSSSSSSSSSSS\n");
-    fflush(stderr);
-    // fflush(stdout);
     //
     pid_t pid, wpid;
     int status;
@@ -329,8 +318,6 @@ int bash_launch(char **args)
     else
     {
         //  parent
-        // close(STDOUT_FILENO);
-        // close(pip_cur[WRITE]);
         wpid = waitpid(pid, &status, WUNTRACED);
     }
     free(new_args);

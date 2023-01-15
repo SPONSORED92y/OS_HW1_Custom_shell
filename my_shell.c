@@ -7,10 +7,10 @@
 void shell_loop();
 char ***get_record_buffer();
 char ***record_buffer;
-// int bash_record(char **args);
+
 int main()
 {
-    // initiallize
+    // initialize
     record_buffer = calloc(sizeof(char **) * 16, sizeof(char **));
     for (int i = 0; i < 16; i++)
     {
@@ -34,8 +34,6 @@ int main()
         free(record_buffer[i]);
     }
     free(record_buffer);
-    //
-
     return 0;
 }
 

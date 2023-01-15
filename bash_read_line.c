@@ -25,7 +25,6 @@ char *bash_read_line()
         }
         else
         {
-            // strcpy(buffer + position, &c);
             buffer[position] = c;
         }
         position++;
