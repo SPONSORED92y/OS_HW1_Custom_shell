@@ -13,15 +13,19 @@ char ***get_record_buffer();
 
 int bash_execute(char **args)
 {
-
+    /*int l = 0;
+    while (args[l])
+    {
+        fprintf(stderr, "%s_", args[l]);
+        l++;
+    }*/
     // check empty comand
     if (strcmp(args[0], "\0") == 0)
     {
         return 1;
     }
     // set flags
-    // int pip_prev[2]; // read from
-    int pip_cur[2]; // write to
+    int pip_cur[2];
     int copy_stdin;
     int copy_stdout;
     char in[30] = "\0";
@@ -148,14 +152,10 @@ int bash_execute(char **args)
         }
         return 1;
     }
-    // adjust IO
+    //
     int iteration = 0;
-    // int p3[2];
-    int tp = -1;
     while (1)
     {
-        fprintf(stderr, "it: %d %d\n", iteration, cmd_count);
-        fflush(stderr);
         if (iteration == 0) // first cmd
         {
         }
@@ -175,41 +175,24 @@ int bash_execute(char **args)
         { // first cmd
           // could be stdin or file_in
             dup2(first_input, STDIN_FILENO);
-            // close(first_input);
+            close(first_input);
         }
         else
         {
-            tp = dup(3);
-            close(tp);
-            tp = -1;
             if ((dup2(pip_cur[READ], STDIN_FILENO)) < 0)
             {
                 perror("lll: ");
                 exit(EXIT_FAILURE);
             }
-            tp = dup(3);
-            close(tp);
-            tp = -1;
             if (close(pip_cur[READ]) < 0)
             {
                 perror("close1: ");
                 exit(EXIT_FAILURE);
             }
-            tp = dup(3);
-            close(tp);
-            tp = -1;
-            // close(pip_cur[READ]);
-            //  pipe
-            /*pip_prev[READ] = dup(pip_cur[READ]);
-            close(pip_cur[READ]);
-            dup2(pip_prev[READ], STDIN_FILENO);
-            close(pip_prev[READ]);
-            */
         }
         //---------------------
         //         |
         // output  v
-
         if (cmd_count - 1 == 0)
         { // last cmd
             // could be stdout or file_out
@@ -219,13 +202,11 @@ int bash_execute(char **args)
                 fflush(stderr);
                 exit(EXIT_FAILURE);
             }
-            //            close(last_output);
+            close(last_output);
         }
         else
         {
             // pipe
-            pip_cur[0] = 0;
-            pip_cur[1] = 0;
             if (pipe(pip_cur) < 0)
             {
                 perror("shell: ");
@@ -235,16 +216,11 @@ int bash_execute(char **args)
                 perror("kkk: ");
                 exit(EXIT_FAILURE);
             }
-            // dup2(pip_cur[WRITE], STDOUT_FILENO);
-            // close(pip_cur[WRITE]);
             if (close(pip_cur[WRITE]) < 0)
             {
                 perror("close: ");
                 exit(EXIT_FAILURE);
             }
-            tp = dup(3);
-            close(tp);
-            tp = -1;
         }
         //---------------------
         // execute cmd
@@ -300,8 +276,6 @@ int bash_execute(char **args)
     }
     close(copy_stdin);
     close(copy_stdout);
-    close(first_input);
-    close(last_output);
     if (pid == 0)
     {
         exit(0);

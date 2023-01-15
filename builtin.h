@@ -48,7 +48,7 @@ int bash_help(char **args)
     printf("4: record:\tshow last 16 cmds you typed in\n");
     printf("5: replay:\tre-execute the cmd showed in record\n");
     printf("6: mypid:\tfind and print process ids\n");
-    printf("7: ecit:\texit shell\n");
+    printf("7: exit:\texit shell\n");
     printf("----------------------------------------------------------\n");
     return 1;
 }

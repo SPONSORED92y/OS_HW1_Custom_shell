@@ -25,9 +25,9 @@ int main()
     printf("============================\n");
     shell_loop();
     // free
-    for (int i = 0; i < 30; i++)
+    for (int i = 0; i < 16; i++)
     {
-        for (int j = 0; j < 50; j++)
+        for (int j = 0; j < 30; j++)
         {
             free(record_buffer[i][j]);
         }
